@@ -35,6 +35,10 @@ final class SelectionWindowController: NSWindowController, NSWindowDelegate {
         window?.frame ?? .zero
     }
 
+    var isVisible: Bool {
+        window?.isVisible ?? false
+    }
+
     func setFrame(_ frame: CGRect, display: Bool = true) {
         window?.setFrame(normalizedFrame(for: frame), display: display)
     }

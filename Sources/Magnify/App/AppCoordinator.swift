@@ -11,8 +11,8 @@ final class AppCoordinator: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
 
-    private let toggleItem = NSMenuItem(title: "Toggle Presentation", action: nil, keyEquivalent: "")
-    private let openSelectionItem = NSMenuItem(title: "Open Selection", action: nil, keyEquivalent: "")
+    private let toggleItem = NSMenuItem(title: "Toggle Presentation", action: nil, keyEquivalent: "m")
+    private let openSelectionItem = NSMenuItem(title: "Toggle Edit Pane", action: nil, keyEquivalent: "e")
     private let resetSelectionItem = NSMenuItem(title: "Reset Selection Size", action: nil, keyEquivalent: "")
     private let permissionItem = NSMenuItem(title: "Grant Screen Recording Permission", action: nil, keyEquivalent: "")
     private let quitItem = NSMenuItem(title: "Quit", action: nil, keyEquivalent: "q")
@@ -60,9 +60,11 @@ final class AppCoordinator: NSObject {
 
         toggleItem.target = self
         toggleItem.action = #selector(togglePresentation)
+        toggleItem.keyEquivalentModifierMask = [.command, .option]
 
         openSelectionItem.target = self
-        openSelectionItem.action = #selector(openSelectionWindow)
+        openSelectionItem.action = #selector(toggleEditPane)
+        openSelectionItem.keyEquivalentModifierMask = [.command, .option]
 
         resetSelectionItem.target = self
         resetSelectionItem.action = #selector(resetSelection)
@@ -98,11 +100,18 @@ final class AppCoordinator: NSObject {
     }
 
     private func configureHotKey() {
-        hotkeyManager.onHotKeyPressed = { [weak self] in
+        hotkeyManager.onModeTogglePressed = { [weak self] in
             Task { @MainActor in
                 self?.modeController.toggleMode()
             }
         }
+
+        hotkeyManager.onEditModeTogglePressed = { [weak self] in
+            Task { @MainActor in
+                self?.modeController.toggleEditMode()
+            }
+        }
+
         hotkeyManager.register()
     }
 
@@ -120,6 +129,7 @@ final class AppCoordinator: NSObject {
         switch mode {
         case .blockedByPermissions:
             toggleItem.title = "Request Permission"
+            openSelectionItem.title = "Toggle Edit Pane"
             openSelectionItem.isHidden = false
             openSelectionItem.isEnabled = false
             resetSelectionItem.isHidden = false
@@ -127,13 +137,15 @@ final class AppCoordinator: NSObject {
             permissionItem.isHidden = false
         case .edit:
             toggleItem.title = "Start Presentation"
+            openSelectionItem.title = modeController.isEditPaneVisible ? "Hide Edit Pane" : "Show Edit Pane"
             openSelectionItem.isHidden = false
-            openSelectionItem.isEnabled = false
+            openSelectionItem.isEnabled = true
             resetSelectionItem.isHidden = false
             resetSelectionItem.isEnabled = true
             permissionItem.isHidden = true
         case .presenting:
             toggleItem.title = "Return to Edit Mode"
+            openSelectionItem.title = "Show Edit Pane"
             openSelectionItem.isHidden = false
             openSelectionItem.isEnabled = true
             resetSelectionItem.isHidden = false
@@ -166,8 +178,8 @@ final class AppCoordinator: NSObject {
     }
 
     @objc
-    private func openSelectionWindow() {
-        modeController.enterEditMode(activating: true)
+    private func toggleEditPane() {
+        modeController.toggleEditMode()
     }
 
     @objc

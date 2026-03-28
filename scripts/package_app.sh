@@ -11,6 +11,8 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 INSTALL_APP="${INSTALL_APP:-0}"
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 INSTALLED_APP_BUNDLE="$INSTALL_DIR/$APP_NAME.app"
+RESET_TCC="${RESET_TCC:-0}"
+RELAUNCH_APP="${RELAUNCH_APP:-0}"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -19,6 +21,41 @@ EXECUTABLE_NAME="${EXECUTABLE_NAME:-$APP_NAME}"
 VERSION="${VERSION:-1.0.0}"
 SHORT_VERSION="${SHORT_VERSION:-1.0.0}"
 BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-dev.magnify.app}"
+
+find_running_app_pids() {
+  pgrep -f "$INSTALLED_APP_BUNDLE/Contents/MacOS/$APP_NAME" || true
+}
+
+stop_running_app_if_needed() {
+  local pids
+  pids="$(find_running_app_pids)"
+
+  if [[ -z "$pids" ]]; then
+    return 1
+  fi
+
+  echo "Stopping running $APP_NAME instance"
+
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "tell application id \"$BUNDLE_IDENTIFIER\" to quit" >/dev/null 2>&1 || true
+  fi
+
+  pkill -TERM -f "$INSTALLED_APP_BUNDLE/Contents/MacOS/$APP_NAME" || true
+
+  for _ in {1..20}; do
+    sleep 0.25
+    if [[ -z "$(find_running_app_pids)" ]]; then
+      return 0
+    fi
+  done
+
+  echo "Forcing running $APP_NAME instance to exit"
+  pkill -KILL -f "$INSTALLED_APP_BUNDLE/Contents/MacOS/$APP_NAME" || true
+  sleep 0.25
+  return 0
+}
+
+was_running=0
 
 mkdir -p "$DIST_DIR"
 
@@ -90,11 +127,25 @@ if command -v codesign >/dev/null 2>&1; then
 fi
 
 if [[ "$INSTALL_APP" == "1" ]]; then
+  if stop_running_app_if_needed; then
+    was_running=1
+  fi
+
+  if [[ "$RESET_TCC" == "1" ]] && command -v tccutil >/dev/null 2>&1; then
+    echo "Resetting Screen Recording permission for $BUNDLE_IDENTIFIER"
+    tccutil reset ScreenCapture "$BUNDLE_IDENTIFIER" || true
+  fi
+
   echo "Installing app bundle to $INSTALL_DIR"
   mkdir -p "$INSTALL_DIR"
   rm -rf "$INSTALLED_APP_BUNDLE"
   ditto "$APP_BUNDLE" "$INSTALLED_APP_BUNDLE"
   touch "$INSTALLED_APP_BUNDLE"
+
+  if [[ "$RELAUNCH_APP" == "1" && "$was_running" == "1" ]]; then
+    echo "Relaunching installed app"
+    open "$INSTALLED_APP_BUNDLE"
+  fi
 fi
 
 echo

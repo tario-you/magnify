@@ -3,39 +3,63 @@ import Foundation
 
 final class GlobalHotkeyManager {
     private enum Constants {
-        static let hotKeyIdentifier: UInt32 = 1
         static let hotKeySignature: OSType = 0x4D41474E // "MAGN"
     }
 
-    private var hotKeyRef: EventHotKeyRef?
+    private enum HotKeyIdentifier: UInt32 {
+        case modeToggle = 1
+        case editModeToggle = 2
+    }
+
+    private struct HotKeyRegistration {
+        let identifier: HotKeyIdentifier
+        let keyCode: UInt32
+        let modifiers: UInt32
+    }
+
+    private var hotKeyRefs: [HotKeyIdentifier: EventHotKeyRef] = [:]
     private var eventHandlerRef: EventHandlerRef?
 
-    var onHotKeyPressed: (() -> Void)?
+    var onModeTogglePressed: (() -> Void)?
+    var onEditModeTogglePressed: (() -> Void)?
 
     func register() {
         installEventHandlerIfNeeded()
         unregister()
 
-        var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = Constants.hotKeySignature
-        hotKeyID.id = Constants.hotKeyIdentifier
-
         let modifiers = UInt32(cmdKey) | UInt32(optionKey)
-        RegisterEventHotKey(
-            UInt32(kVK_ANSI_M),
-            modifiers,
-            hotKeyID,
-            GetEventDispatcherTarget(),
-            0,
-            &hotKeyRef
-        )
+        let registrations = [
+            HotKeyRegistration(identifier: .modeToggle, keyCode: UInt32(kVK_ANSI_M), modifiers: modifiers),
+            HotKeyRegistration(identifier: .editModeToggle, keyCode: UInt32(kVK_ANSI_E), modifiers: modifiers)
+        ]
+
+        for registration in registrations {
+            var hotKeyID = EventHotKeyID()
+            hotKeyID.signature = Constants.hotKeySignature
+            hotKeyID.id = registration.identifier.rawValue
+
+            var hotKeyRef: EventHotKeyRef?
+            RegisterEventHotKey(
+                registration.keyCode,
+                registration.modifiers,
+                hotKeyID,
+                GetEventDispatcherTarget(),
+                0,
+                &hotKeyRef
+            )
+
+            if let hotKeyRef {
+                hotKeyRefs[registration.identifier] = hotKeyRef
+            }
+        }
     }
 
     func unregister() {
-        if let hotKeyRef {
+        for hotKeyRef in hotKeyRefs.values {
             UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
         }
+
+        hotKeyRefs.removeAll()
     }
 
     deinit {
@@ -79,8 +103,16 @@ final class GlobalHotkeyManager {
                     return status
                 }
 
-                if hotKeyID.signature == Constants.hotKeySignature && hotKeyID.id == Constants.hotKeyIdentifier {
-                    manager.onHotKeyPressed?()
+                guard hotKeyID.signature == Constants.hotKeySignature,
+                      let identifier = HotKeyIdentifier(rawValue: hotKeyID.id) else {
+                    return noErr
+                }
+
+                switch identifier {
+                case .modeToggle:
+                    manager.onModeTogglePressed?()
+                case .editModeToggle:
+                    manager.onEditModeTogglePressed?()
                 }
 
                 return noErr

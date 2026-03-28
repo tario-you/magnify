@@ -11,6 +11,9 @@ final class ModeController {
 
     var onModeChange: ((AppMode) -> Void)?
     var onError: ((Error) -> Void)?
+    var isEditPaneVisible: Bool {
+        mode == .edit && selectionWindowController.isVisible
+    }
 
     private let permissionsManager: PermissionsManager
     private let selectionWindowController: SelectionWindowController
@@ -59,6 +62,27 @@ final class ModeController {
         case .edit:
             Task {
                 await enterPresentationMode()
+            }
+        case .presenting:
+            enterEditMode(activating: true)
+        }
+    }
+
+    func toggleEditMode() {
+        guard !isTransitioning else {
+            return
+        }
+
+        switch mode {
+        case .blockedByPermissions:
+            requestPermissions()
+        case .edit:
+            if selectionWindowController.isVisible {
+                selectionWindowController.hide()
+                onModeChange?(mode)
+            } else {
+                selectionWindowController.show(activating: true)
+                onModeChange?(mode)
             }
         case .presenting:
             enterEditMode(activating: true)
