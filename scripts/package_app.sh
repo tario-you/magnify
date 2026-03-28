@@ -13,6 +13,16 @@ INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 INSTALLED_APP_BUNDLE="$INSTALL_DIR/$APP_NAME.app"
 RESET_TCC="${RESET_TCC:-0}"
 RELAUNCH_APP="${RELAUNCH_APP:-0}"
+CREATE_ZIP="${CREATE_ZIP:-0}"
+CREATE_DMG="${CREATE_DMG:-0}"
+DMG_PATH="${DMG_PATH:-$DIST_DIR/$APP_NAME.dmg}"
+ZIP_PATH="${ZIP_PATH:-$DIST_DIR/$APP_NAME.zip}"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$ROOT_DIR/scripts/release-entitlements.plist}"
+NOTARIZE_APP="${NOTARIZE_APP:-0}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
+DMG_STAGING_DIR="$DIST_DIR/.dmg-staging"
+ARCHIVE_NAME="$APP_NAME"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -56,6 +66,59 @@ stop_running_app_if_needed() {
 }
 
 was_running=0
+
+sign_path() {
+  local target="$1"
+
+  if ! command -v codesign >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ -n "$SIGNING_IDENTITY" ]]; then
+    echo "Signing $target with Developer ID identity"
+    codesign --force --deep --options runtime --timestamp --entitlements "$ENTITLEMENTS_PATH" --sign "$SIGNING_IDENTITY" "$target"
+  else
+    echo "Signing $target with ad-hoc identity"
+    codesign --force --deep --sign - "$target"
+  fi
+}
+
+verify_signature() {
+  local target="$1"
+
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --verify --deep --strict "$target"
+  fi
+}
+
+notarize_file() {
+  local target="$1"
+
+  if [[ "$NOTARIZE_APP" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ -z "$NOTARY_PROFILE" ]]; then
+    echo "NOTARIZE_APP=1 requires NOTARY_PROFILE to be set" >&2
+    exit 1
+  fi
+
+  if ! command -v xcrun >/dev/null 2>&1; then
+    echo "xcrun is required for notarization" >&2
+    exit 1
+  fi
+
+  echo "Submitting $target for notarization"
+  xcrun notarytool submit "$target" --keychain-profile "$NOTARY_PROFILE" --wait
+
+  if [[ "$target" == *.app ]]; then
+    echo "Stapling notarization ticket to app bundle"
+    xcrun stapler staple "$target"
+  elif [[ "$target" == *.dmg ]]; then
+    echo "Stapling notarization ticket to disk image"
+    xcrun stapler staple "$target"
+  fi
+}
 
 mkdir -p "$DIST_DIR"
 
@@ -121,9 +184,44 @@ cat > "$INFO_PLIST" <<EOF
 </plist>
 EOF
 
-if command -v codesign >/dev/null 2>&1; then
-  echo "Signing app bundle"
-  codesign --force --deep --sign - "$APP_BUNDLE"
+sign_path "$APP_BUNDLE"
+verify_signature "$APP_BUNDLE"
+
+if [[ "$CREATE_ZIP" == "1" ]]; then
+  echo "Creating zip archive at $ZIP_PATH"
+  rm -f "$ZIP_PATH"
+  ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ZIP_PATH"
+fi
+
+if [[ "$CREATE_DMG" == "1" ]]; then
+  echo "Creating disk image at $DMG_PATH"
+  rm -rf "$DMG_STAGING_DIR"
+  rm -f "$DMG_PATH"
+  mkdir -p "$DMG_STAGING_DIR"
+  ditto "$APP_BUNDLE" "$DMG_STAGING_DIR/$APP_NAME.app"
+  ln -s /Applications "$DMG_STAGING_DIR/Applications"
+
+  hdiutil create \
+    -volname "$APP_NAME" \
+    -srcfolder "$DMG_STAGING_DIR" \
+    -ov \
+    -format UDZO \
+    "$DMG_PATH" >/dev/null
+fi
+
+if [[ "$CREATE_DMG" == "1" && -n "$SIGNING_IDENTITY" ]]; then
+  sign_path "$DMG_PATH"
+  verify_signature "$DMG_PATH"
+fi
+
+if [[ "$NOTARIZE_APP" == "1" ]]; then
+  if [[ "$CREATE_DMG" == "1" ]]; then
+    notarize_file "$DMG_PATH"
+  elif [[ "$CREATE_ZIP" == "1" ]]; then
+    notarize_file "$ZIP_PATH"
+  else
+    notarize_file "$APP_BUNDLE"
+  fi
 fi
 
 if [[ "$INSTALL_APP" == "1" ]]; then
@@ -151,6 +249,14 @@ fi
 echo
 echo "Packaged app:"
 echo "  $APP_BUNDLE"
+
+if [[ "$CREATE_ZIP" == "1" ]]; then
+  echo "  $ZIP_PATH"
+fi
+
+if [[ "$CREATE_DMG" == "1" ]]; then
+  echo "  $DMG_PATH"
+fi
 
 if [[ "$INSTALL_APP" == "1" ]]; then
   echo

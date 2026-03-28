@@ -6,6 +6,16 @@
 
 Magnify is a lightweight macOS video conferencing tool that turns a draggable screen region into a clean full-screen live zoom view for demos, calls, and screen shares.
 
+## Screenshots
+
+**Edit mode**
+
+![Magnify edit mode screenshot](Resources/screenshots/edit-mode.png)
+
+**Presentation mode**
+
+![Magnify presentation mode screenshot](Resources/screenshots/presentation-mode.png)
+
 ## Install
 
 ```bash
@@ -14,6 +24,14 @@ open /Applications/Magnify.app
 ```
 
 Grant Screen Recording permission when macOS prompts for it.
+
+## Release
+
+```bash
+make release-archives
+```
+
+That writes `dist/Magnify.app`, `dist/Magnify.zip`, and `dist/Magnify.dmg`. For public distribution without Gatekeeper warnings, set `SIGNING_IDENTITY` and optionally `NOTARY_PROFILE` before running the release target.
 
 ## Use
 

@@ -4,7 +4,7 @@ INSTALL_DIR ?= /Applications
 RESET_TCC ?= 1
 RELAUNCH_APP ?= 1
 
-.PHONY: build release package install clean
+.PHONY: build release package release-archives install clean
 
 build:
 	swift build
@@ -14,6 +14,9 @@ release:
 
 package:
 	./scripts/package_app.sh
+
+release-archives:
+	CREATE_ZIP=1 CREATE_DMG=1 ./scripts/package_app.sh
 
 install:
 	INSTALL_APP=1 INSTALL_DIR="$(INSTALL_DIR)" RESET_TCC="$(RESET_TCC)" RELAUNCH_APP="$(RELAUNCH_APP)" ./scripts/package_app.sh
