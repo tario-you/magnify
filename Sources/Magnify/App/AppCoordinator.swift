@@ -52,7 +52,10 @@ final class AppCoordinator: NSObject {
 
     private func configureMenuBar() {
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "macwindow.and.cursorarrow", accessibilityDescription: "Magnify")
+            let iconImage = bundledAppIcon()
+                ?? NSImage(systemSymbolName: "macwindow.and.cursorarrow", accessibilityDescription: "Magnify")
+            iconImage?.size = NSSize(width: 18, height: 18)
+            button.image = iconImage
         }
 
         toggleItem.target = self
@@ -80,6 +83,18 @@ final class AppCoordinator: NSObject {
         ]
 
         statusItem.menu = menu
+
+        if let iconImage = bundledAppIcon() {
+            NSApp.applicationIconImage = iconImage
+        }
+    }
+
+    private func bundledAppIcon() -> NSImage? {
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") {
+            return NSImage(contentsOf: iconURL)
+        }
+
+        return nil
     }
 
     private func configureHotKey() {
