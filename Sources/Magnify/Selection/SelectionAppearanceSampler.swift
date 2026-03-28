@@ -4,10 +4,11 @@ import CoreImage
 import Foundation
 
 final class SelectionAppearanceSampler: @unchecked Sendable {
+    private let debounceDelay: DispatchTimeInterval = .milliseconds(180)
     private let sampleQueue = DispatchQueue(label: "magnify.selection-appearance-sampler", qos: .utility)
     private let ciContext = CIContext(options: nil)
 
-    private var timer: DispatchSourceTimer?
+    private var pendingSampleWorkItem: DispatchWorkItem?
     private var latestStyle: SelectionContrastStyle?
     private var frameProvider: (@MainActor () -> CGRect)?
     private var windowIDProvider: (@MainActor () -> CGWindowID?)?
@@ -22,33 +23,31 @@ final class SelectionAppearanceSampler: @unchecked Sendable {
         self.windowIDProvider = windowIDProvider
         self.styleHandler = styleHandler
 
-        guard timer == nil else {
-            refresh()
-            return
-        }
-
-        let timer = DispatchSource.makeTimerSource(queue: sampleQueue)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(250))
-        timer.setEventHandler { [weak self] in
-            self?.sampleAppearance()
-        }
-        self.timer = timer
-        timer.resume()
+        scheduleSample(after: .milliseconds(10))
     }
 
     func refresh() {
-        sampleQueue.async { [weak self] in
-            self?.sampleAppearance()
-        }
+        scheduleSample(after: debounceDelay)
     }
 
     func stop() {
-        timer?.cancel()
-        timer = nil
+        pendingSampleWorkItem?.cancel()
+        pendingSampleWorkItem = nil
         latestStyle = nil
         frameProvider = nil
         windowIDProvider = nil
         styleHandler = nil
+    }
+
+    private func scheduleSample(after delay: DispatchTimeInterval) {
+        pendingSampleWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.sampleAppearance()
+        }
+
+        pendingSampleWorkItem = workItem
+        sampleQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func sampleAppearance() {
@@ -103,7 +102,7 @@ final class SelectionAppearanceSampler: @unchecked Sendable {
     }
 
     private func snapshotImage(for frame: CGRect, excluding windowID: CGWindowID?) -> CGImage? {
-        let bounds = frame.integral
+        let bounds = sampleBounds(for: frame)
         guard bounds.width > 1, bounds.height > 1 else {
             return nil
         }
@@ -123,6 +122,19 @@ final class SelectionAppearanceSampler: @unchecked Sendable {
             kCGNullWindowID,
             [.bestResolution, .boundsIgnoreFraming]
         )
+    }
+
+    private func sampleBounds(for frame: CGRect) -> CGRect {
+        let maxSampleSize: CGFloat = 160
+        let width = min(frame.width, maxSampleSize)
+        let height = min(frame.height, maxSampleSize)
+
+        return CGRect(
+            x: frame.midX - (width / 2),
+            y: frame.midY - (height / 2),
+            width: width,
+            height: height
+        ).integral
     }
 
     private func classifyAppearance(for image: CGImage) -> SelectionContrastStyle? {
