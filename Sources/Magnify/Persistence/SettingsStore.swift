@@ -32,9 +32,16 @@ final class SettingsStore {
     func defaultSelectionFrame(on screen: NSScreen?) -> CGRect {
         let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
         let referenceFrame = targetScreen?.visibleFrame ?? CGRect(x: 200, y: 200, width: 1280, height: 800)
+        let aspectRatio = targetScreen?.displayAspectRatio ?? CGSize(width: 16, height: 10)
+        let aspectValue = aspectRatio.width / aspectRatio.height
 
-        let width = min(max(referenceFrame.width * 0.35, 420), 960)
-        let height = min(max(referenceFrame.height * 0.30, 260), 720)
+        var width = min(max(referenceFrame.width * 0.42, 420), 960)
+        var height = width / aspectValue
+
+        if height > referenceFrame.height * 0.42 {
+            height = referenceFrame.height * 0.42
+            width = height * aspectValue
+        }
 
         return CGRect(
             x: referenceFrame.midX - (width / 2),

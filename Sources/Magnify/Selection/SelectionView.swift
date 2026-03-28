@@ -151,37 +151,175 @@ final class SelectionView: NSView {
     }
 
     private func resizedFrame(from frame: CGRect, delta: CGPoint, edges: ResizeEdge) -> CGRect {
-        var newFrame = frame
+        let aspectRatio = currentAspectRatio(for: frame)
+        let aspectValue = aspectRatio.width / aspectRatio.height
+        let screenFrame = NSScreen.screenContainingLargestIntersection(with: frame)?.frame ?? NSScreen.main?.frame ?? frame
 
-        if edges.contains(.left) {
-            newFrame.origin.x += delta.x
-            newFrame.size.width -= delta.x
+        let maxWidth = screenFrame.width
+        let maxHeight = screenFrame.height
+        let minimumWidth = max(minimumSize.width, minimumSize.height * aspectValue)
+        let minimumHeight = minimumWidth / aspectValue
+
+        let hasHorizontalEdge = edges.intersection([.left, .right]).isEmpty == false
+        let hasVerticalEdge = edges.intersection([.top, .bottom]).isEmpty == false
+
+        switch (hasHorizontalEdge, hasVerticalEdge) {
+        case (true, true):
+            return resizedFromCorner(
+                frame: frame,
+                delta: delta,
+                edges: edges,
+                aspectValue: aspectValue,
+                minimumWidth: minimumWidth,
+                minimumHeight: minimumHeight,
+                maxWidth: maxWidth,
+                maxHeight: maxHeight,
+                screenFrame: screenFrame
+            )
+        case (true, false):
+            return resizedFromHorizontalEdge(
+                frame: frame,
+                delta: delta,
+                edges: edges,
+                aspectValue: aspectValue,
+                minimumWidth: minimumWidth,
+                maxWidth: maxWidth,
+                maxHeight: maxHeight,
+                screenFrame: screenFrame
+            )
+        case (false, true):
+            return resizedFromVerticalEdge(
+                frame: frame,
+                delta: delta,
+                edges: edges,
+                aspectValue: aspectValue,
+                minimumHeight: minimumHeight,
+                maxWidth: maxWidth,
+                maxHeight: maxHeight,
+                screenFrame: screenFrame
+            )
+        case (false, false):
+            return frame
         }
-        if edges.contains(.right) {
-            newFrame.size.width += delta.x
-        }
-        if edges.contains(.bottom) {
-            newFrame.origin.y += delta.y
-            newFrame.size.height -= delta.y
-        }
-        if edges.contains(.top) {
-            newFrame.size.height += delta.y
+    }
+
+    private func currentAspectRatio(for frame: CGRect) -> CGSize {
+        NSScreen.screenContainingLargestIntersection(with: frame)?.displayAspectRatio
+            ?? NSScreen.main?.displayAspectRatio
+            ?? CGSize(width: 16, height: 10)
+    }
+
+    private func resizedFromHorizontalEdge(
+        frame: CGRect,
+        delta: CGPoint,
+        edges: ResizeEdge,
+        aspectValue: CGFloat,
+        minimumWidth: CGFloat,
+        maxWidth: CGFloat,
+        maxHeight: CGFloat,
+        screenFrame: CGRect
+    ) -> CGRect {
+        let widthDelta = edges.contains(.left) ? -delta.x : delta.x
+        var width = max(frame.width + widthDelta, minimumWidth)
+        width = min(width, maxWidth)
+
+        var height = width / aspectValue
+        if height > maxHeight {
+            height = maxHeight
+            width = height * aspectValue
         }
 
-        if newFrame.width < minimumSize.width {
-            if edges.contains(.left) {
-                newFrame.origin.x = frame.maxX - minimumSize.width
+        let x = edges.contains(.left) ? frame.maxX - width : frame.minX
+        let y = frame.midY - (height / 2)
+
+        return clampedFrame(
+            CGRect(x: x, y: y, width: width, height: height),
+            to: screenFrame
+        )
+    }
+
+    private func resizedFromVerticalEdge(
+        frame: CGRect,
+        delta: CGPoint,
+        edges: ResizeEdge,
+        aspectValue: CGFloat,
+        minimumHeight: CGFloat,
+        maxWidth: CGFloat,
+        maxHeight: CGFloat,
+        screenFrame: CGRect
+    ) -> CGRect {
+        let heightDelta = edges.contains(.bottom) ? -delta.y : delta.y
+        var height = max(frame.height + heightDelta, minimumHeight)
+        height = min(height, maxHeight)
+
+        var width = height * aspectValue
+        if width > maxWidth {
+            width = maxWidth
+            height = width / aspectValue
+        }
+
+        let x = frame.midX - (width / 2)
+        let y = edges.contains(.bottom) ? frame.maxY - height : frame.minY
+
+        return clampedFrame(
+            CGRect(x: x, y: y, width: width, height: height),
+            to: screenFrame
+        )
+    }
+
+    private func resizedFromCorner(
+        frame: CGRect,
+        delta: CGPoint,
+        edges: ResizeEdge,
+        aspectValue: CGFloat,
+        minimumWidth: CGFloat,
+        minimumHeight: CGFloat,
+        maxWidth: CGFloat,
+        maxHeight: CGFloat,
+        screenFrame: CGRect
+    ) -> CGRect {
+        let proposedWidth = frame.width + (edges.contains(.left) ? -delta.x : delta.x)
+        let proposedHeight = frame.height + (edges.contains(.bottom) ? -delta.y : delta.y)
+        let normalizedWidthChange = abs((proposedWidth - frame.width) / max(frame.width, 1))
+        let normalizedHeightChange = abs((proposedHeight - frame.height) / max(frame.height, 1))
+        let shouldDriveFromWidth = normalizedWidthChange >= normalizedHeightChange
+
+        var width: CGFloat
+        var height: CGFloat
+
+        if shouldDriveFromWidth {
+            width = max(proposedWidth, minimumWidth)
+            width = min(width, maxWidth)
+            height = width / aspectValue
+            if height > maxHeight {
+                height = maxHeight
+                width = height * aspectValue
             }
-            newFrame.size.width = minimumSize.width
-        }
-
-        if newFrame.height < minimumSize.height {
-            if edges.contains(.bottom) {
-                newFrame.origin.y = frame.maxY - minimumSize.height
+        } else {
+            height = max(proposedHeight, minimumHeight)
+            height = min(height, maxHeight)
+            width = height * aspectValue
+            if width > maxWidth {
+                width = maxWidth
+                height = width / aspectValue
             }
-            newFrame.size.height = minimumSize.height
         }
 
-        return newFrame
+        let x = edges.contains(.left) ? frame.maxX - width : frame.minX
+        let y = edges.contains(.bottom) ? frame.maxY - height : frame.minY
+
+        return clampedFrame(
+            CGRect(x: x, y: y, width: width, height: height),
+            to: screenFrame
+        )
+    }
+
+    private func clampedFrame(_ frame: CGRect, to screenFrame: CGRect) -> CGRect {
+        let width = min(frame.width, screenFrame.width)
+        let height = min(frame.height, screenFrame.height)
+        let x = min(max(frame.minX, screenFrame.minX), screenFrame.maxX - width)
+        let y = min(max(frame.minY, screenFrame.minY), screenFrame.maxY - height)
+
+        return CGRect(x: x, y: y, width: width, height: height).integral
     }
 }

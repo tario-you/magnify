@@ -15,34 +15,28 @@ struct DisplayTarget {
 @MainActor
 final class DisplayResolver {
     func resolveDisplayTarget(for selectionFrame: CGRect) -> DisplayTarget? {
-        let candidates = NSScreen.screens.compactMap { screen -> (screen: NSScreen, displayID: CGDirectDisplayID, intersection: CGRect, area: CGFloat)? in
-            guard let displayID = screen.displayID else {
-                return nil
-            }
-
-            let intersection = selectionFrame.intersection(screen.frame)
-            guard !intersection.isNull, !intersection.isEmpty else {
-                return nil
-            }
-
-            let area = intersection.width * intersection.height
-            return (screen, displayID, intersection, area)
-        }
-
-        guard let best = candidates.max(by: { $0.area < $1.area }) else {
+        guard
+            let screen = NSScreen.screenContainingLargestIntersection(with: selectionFrame),
+            let displayID = screen.displayID
+        else {
             return nil
         }
 
-        let pixelWidth = CGFloat(CGDisplayPixelsWide(best.displayID))
-        let pixelHeight = CGFloat(CGDisplayPixelsHigh(best.displayID))
-        let scaleX = pixelWidth / best.screen.frame.width
-        let scaleY = pixelHeight / best.screen.frame.height
+        let intersection = selectionFrame.intersection(screen.frame)
+        guard !intersection.isNull, !intersection.isEmpty else {
+            return nil
+        }
+
+        let pixelWidth = CGFloat(CGDisplayPixelsWide(displayID))
+        let pixelHeight = CGFloat(CGDisplayPixelsHigh(displayID))
+        let scaleX = pixelWidth / screen.frame.width
+        let scaleY = pixelHeight / screen.frame.height
 
         let relativeRect = CGRect(
-            x: best.intersection.minX - best.screen.frame.minX,
-            y: best.intersection.minY - best.screen.frame.minY,
-            width: best.intersection.width,
-            height: best.intersection.height
+            x: intersection.minX - screen.frame.minX,
+            y: intersection.minY - screen.frame.minY,
+            width: intersection.width,
+            height: intersection.height
         )
 
         let cropRect = CGRect(
@@ -57,9 +51,9 @@ final class DisplayResolver {
         }
 
         return DisplayTarget(
-            screen: best.screen,
+            screen: screen,
             captureRequest: CaptureRequest(
-                displayID: best.displayID,
+                displayID: displayID,
                 pixelSize: CGSize(width: pixelWidth, height: pixelHeight),
                 cropRectPixels: cropRect
             )
@@ -67,13 +61,35 @@ final class DisplayResolver {
     }
 }
 
-private extension NSScreen {
+extension NSScreen {
     var displayID: CGDirectDisplayID? {
         deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
+
+    var displayAspectRatio: CGSize {
+        CGSize(width: frame.width, height: frame.height)
+    }
+
+    static func screenContainingLargestIntersection(with frame: CGRect) -> NSScreen? {
+        screens
+            .compactMap { screen -> (screen: NSScreen, area: CGFloat)? in
+                let intersection = frame.intersection(screen.frame)
+                guard !intersection.isNull, !intersection.isEmpty else {
+                    return nil
+                }
+
+                return (screen, intersection.width * intersection.height)
+            }
+            .max(by: { $0.area < $1.area })?
+            .screen
+    }
 }
 
-private extension CGRect {
+extension CGRect {
+    var center: CGPoint {
+        CGPoint(x: midX, y: midY)
+    }
+
     func clamped(to bounds: CGRect) -> CGRect {
         guard !self.isNull, !self.isEmpty else {
             return .null
@@ -89,5 +105,14 @@ private extension CGRect {
         }
 
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    func centered(at point: CGPoint) -> CGRect {
+        CGRect(
+            x: point.x - (width / 2),
+            y: point.y - (height / 2),
+            width: width,
+            height: height
+        )
     }
 }

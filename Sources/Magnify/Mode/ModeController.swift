@@ -91,6 +91,8 @@ final class ModeController {
             return
         }
 
+        selectionWindowController.normalizeToDisplayAspect(display: true)
+
         guard let target = displayResolver.resolveDisplayTarget(for: selectionWindowController.frame) else {
             onError?(MagnifyError.invalidSelection)
             return
