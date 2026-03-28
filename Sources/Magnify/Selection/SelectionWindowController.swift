@@ -39,8 +39,16 @@ final class SelectionWindowController: NSWindowController, NSWindowDelegate {
         window?.isVisible ?? false
     }
 
+    var windowID: CGWindowID? {
+        window.map { CGWindowID($0.windowNumber) }
+    }
+
     func setFrame(_ frame: CGRect, display: Bool = true) {
         window?.setFrame(normalizedFrame(for: frame), display: display)
+    }
+
+    func update(contrastStyle: SelectionContrastStyle) {
+        selectionView.contrastStyle = contrastStyle
     }
 
     func show(activating: Bool) {

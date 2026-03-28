@@ -21,6 +21,16 @@ final class SelectionView: NSView {
     private let resizeHandleThickness: CGFloat = 12
     private let minimumSize = CGSize(width: 220, height: 140)
 
+    var contrastStyle: SelectionContrastStyle = .darkSurface {
+        didSet {
+            guard oldValue != contrastStyle else {
+                return
+            }
+
+            setNeedsDisplay(bounds)
+        }
+    }
+
     private var activeInteraction: Interaction?
     private var initialFrame: CGRect = .zero
     private var initialMouseLocation: CGPoint = .zero
@@ -50,16 +60,16 @@ final class SelectionView: NSView {
         let insetBounds = bounds.insetBy(dx: borderInset / 2, dy: borderInset / 2)
         let path = NSBezierPath(roundedRect: insetBounds, xRadius: cornerRadius, yRadius: cornerRadius)
 
-        NSColor.white.withAlphaComponent(0.10).setFill()
+        contrastStyle.fillColor.setFill()
         path.fill()
 
         path.lineWidth = 2
-        NSColor.white.withAlphaComponent(0.72).setStroke()
+        contrastStyle.strokeColor.setStroke()
         path.stroke()
 
         let innerPath = NSBezierPath(roundedRect: insetBounds.insetBy(dx: 5, dy: 5), xRadius: cornerRadius - 4, yRadius: cornerRadius - 4)
         innerPath.lineWidth = 1
-        NSColor.white.withAlphaComponent(0.16).setStroke()
+        contrastStyle.innerStrokeColor.setStroke()
         innerPath.stroke()
     }
 

@@ -22,6 +22,7 @@ final class AppCoordinator: NSObject {
         let controller = SelectionWindowController(initialFrame: initialFrame)
         controller.onFrameChange = { [weak self] frame in
             self?.settingsStore.saveSelectionFrame(frame)
+            self?.modeController.refreshSelectionAppearance()
         }
         return controller
     }()
@@ -144,7 +145,7 @@ final class AppCoordinator: NSObject {
             resetSelectionItem.isEnabled = true
             permissionItem.isHidden = true
         case .presenting:
-            toggleItem.title = "Return to Edit Mode"
+            toggleItem.title = "Stop Presentation"
             openSelectionItem.title = "Show Edit Pane"
             openSelectionItem.isHidden = false
             openSelectionItem.isEnabled = true

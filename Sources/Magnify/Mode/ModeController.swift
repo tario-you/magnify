@@ -20,6 +20,7 @@ final class ModeController {
     private let presentationWindowController: PresentationWindowController
     private let displayResolver: DisplayResolver
     private let captureEngine: CaptureEngine
+    private let selectionAppearanceSampler = SelectionAppearanceSampler()
 
     private var isTransitioning = false
 
@@ -64,7 +65,7 @@ final class ModeController {
                 await enterPresentationMode()
             }
         case .presenting:
-            enterEditMode(activating: true)
+            enterEditMode(activating: false, showingSelection: false)
         }
     }
 
@@ -79,22 +80,41 @@ final class ModeController {
         case .edit:
             if selectionWindowController.isVisible {
                 selectionWindowController.hide()
+                stopSelectionAppearanceSampling()
                 onModeChange?(mode)
             } else {
                 selectionWindowController.show(activating: true)
+                startSelectionAppearanceSampling()
                 onModeChange?(mode)
             }
         case .presenting:
-            enterEditMode(activating: true)
+            enterEditMode(activating: true, showingSelection: true)
         }
     }
 
-    func enterEditMode(activating: Bool) {
+    func enterEditMode(activating: Bool, showingSelection: Bool = true) {
         captureEngine.stopCapture()
         presentationWindowController.hide()
-        selectionWindowController.show(activating: activating)
         mode = permissionsManager.hasScreenRecordingPermission() ? .edit : .blockedByPermissions
+
+        guard mode == .edit, showingSelection else {
+            selectionWindowController.hide()
+            stopSelectionAppearanceSampling()
+            isTransitioning = false
+            return
+        }
+
+        selectionWindowController.show(activating: activating)
+        startSelectionAppearanceSampling()
         isTransitioning = false
+    }
+
+    func refreshSelectionAppearance() {
+        guard mode == .edit, selectionWindowController.isVisible else {
+            return
+        }
+
+        selectionAppearanceSampler.refresh()
     }
 
     func requestPermissions() {
@@ -123,6 +143,7 @@ final class ModeController {
         }
 
         isTransitioning = true
+        stopSelectionAppearanceSampling()
         selectionWindowController.hide()
         presentationWindowController.show(on: target.screen)
 
@@ -132,10 +153,34 @@ final class ModeController {
         } catch {
             presentationWindowController.hide()
             selectionWindowController.show(activating: true)
+            startSelectionAppearanceSampling()
             onError?(error)
             mode = .edit
         }
 
         isTransitioning = false
+    }
+
+    private func startSelectionAppearanceSampling() {
+        guard mode != .blockedByPermissions, selectionWindowController.isVisible else {
+            stopSelectionAppearanceSampling()
+            return
+        }
+
+        selectionAppearanceSampler.start(
+            frameProvider: { [weak selectionWindowController] in
+                selectionWindowController?.frame ?? .zero
+            },
+            windowIDProvider: { [weak selectionWindowController] in
+                selectionWindowController?.windowID
+            },
+            styleHandler: { [weak selectionWindowController] style in
+                selectionWindowController?.update(contrastStyle: style)
+            }
+        )
+    }
+
+    private func stopSelectionAppearanceSampling() {
+        selectionAppearanceSampler.stop()
     }
 }
