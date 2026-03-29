@@ -9,6 +9,9 @@ final class GlobalHotkeyManager {
     private enum HotKeyIdentifier: UInt32 {
         case modeToggle = 1
         case editModeToggle = 2
+        case zoomToggle = 3
+        case zoomOut = 4
+        case zoomIn = 5
     }
 
     private struct HotKeyRegistration {
@@ -22,15 +25,23 @@ final class GlobalHotkeyManager {
 
     var onModeTogglePressed: (() -> Void)?
     var onEditModeTogglePressed: (() -> Void)?
+    var onZoomTogglePressed: (() -> Void)?
+    var onZoomOutPressed: (() -> Void)?
+    var onZoomInPressed: (() -> Void)?
 
     func register() {
         installEventHandlerIfNeeded()
         unregister()
 
-        let modifiers = UInt32(cmdKey) | UInt32(optionKey)
+        let presentationModifiers = UInt32(cmdKey) | UInt32(optionKey)
+        let zoomModifiers = UInt32(optionKey)
+        let zoomInModifiers = UInt32(optionKey)
         let registrations = [
-            HotKeyRegistration(identifier: .modeToggle, keyCode: UInt32(kVK_ANSI_M), modifiers: modifiers),
-            HotKeyRegistration(identifier: .editModeToggle, keyCode: UInt32(kVK_ANSI_E), modifiers: modifiers)
+            HotKeyRegistration(identifier: .modeToggle, keyCode: UInt32(kVK_ANSI_M), modifiers: presentationModifiers),
+            HotKeyRegistration(identifier: .editModeToggle, keyCode: UInt32(kVK_ANSI_E), modifiers: presentationModifiers),
+            HotKeyRegistration(identifier: .zoomToggle, keyCode: UInt32(kVK_ANSI_8), modifiers: zoomModifiers),
+            HotKeyRegistration(identifier: .zoomOut, keyCode: UInt32(kVK_ANSI_Minus), modifiers: zoomModifiers),
+            HotKeyRegistration(identifier: .zoomIn, keyCode: UInt32(kVK_ANSI_Equal), modifiers: zoomInModifiers)
         ]
 
         for registration in registrations {
@@ -113,6 +124,12 @@ final class GlobalHotkeyManager {
                     manager.onModeTogglePressed?()
                 case .editModeToggle:
                     manager.onEditModeTogglePressed?()
+                case .zoomToggle:
+                    manager.onZoomTogglePressed?()
+                case .zoomOut:
+                    manager.onZoomOutPressed?()
+                case .zoomIn:
+                    manager.onZoomInPressed?()
                 }
 
                 return noErr

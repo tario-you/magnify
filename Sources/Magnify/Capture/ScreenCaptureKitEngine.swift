@@ -55,6 +55,16 @@ final class ScreenCaptureKitEngine: NSObject, CaptureEngine, SCStreamOutput, SCS
         }
     }
 
+    func updateCapture(for request: CaptureRequest) {
+        stateQueue.sync {
+            guard stream != nil else {
+                return
+            }
+
+            currentRequest = request
+        }
+    }
+
     func stopCapture() {
         let streamToStop: SCStream? = stateQueue.sync {
             defer {

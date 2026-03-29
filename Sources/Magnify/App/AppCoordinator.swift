@@ -8,7 +8,7 @@ final class AppCoordinator: NSObject {
     private let captureEngine = ScreenCaptureKitEngine()
     private let hotkeyManager = GlobalHotkeyManager()
 
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
     private let toggleItem = NSMenuItem(title: "Toggle Presentation", action: nil, keyEquivalent: "m")
@@ -53,10 +53,13 @@ final class AppCoordinator: NSObject {
 
     private func configureMenuBar() {
         if let button = statusItem.button {
-            let iconImage = bundledAppIcon()
+            let iconImage = menuBarIconImage()
                 ?? NSImage(systemSymbolName: "macwindow.and.cursorarrow", accessibilityDescription: "Magnify")
-            iconImage?.size = NSSize(width: 18, height: 18)
+            iconImage?.size = NSSize(width: 21, height: 21)
+            button.title = ""
             button.image = iconImage
+            button.imagePosition = .imageOnly
+            button.toolTip = "Magnify"
         }
 
         toggleItem.target = self
@@ -92,6 +95,16 @@ final class AppCoordinator: NSObject {
         }
     }
 
+    private func menuBarIconImage() -> NSImage? {
+        guard let iconURL = Bundle.main.url(forResource: "MenuBarSymbol", withExtension: "png"),
+              let image = NSImage(contentsOf: iconURL) else {
+            return nil
+        }
+
+        image.isTemplate = true
+        return image
+    }
+
     private func bundledAppIcon() -> NSImage? {
         if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") {
             return NSImage(contentsOf: iconURL)
@@ -107,9 +120,27 @@ final class AppCoordinator: NSObject {
             }
         }
 
+        hotkeyManager.onZoomTogglePressed = { [weak self] in
+            Task { @MainActor in
+                self?.modeController.toggleCursorZoom()
+            }
+        }
+
         hotkeyManager.onEditModeTogglePressed = { [weak self] in
             Task { @MainActor in
                 self?.modeController.toggleEditMode()
+            }
+        }
+
+        hotkeyManager.onZoomOutPressed = { [weak self] in
+            Task { @MainActor in
+                self?.modeController.decreaseZoom()
+            }
+        }
+
+        hotkeyManager.onZoomInPressed = { [weak self] in
+            Task { @MainActor in
+                self?.modeController.increaseZoom()
             }
         }
 

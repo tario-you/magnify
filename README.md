@@ -38,3 +38,6 @@ That writes `dist/Magnify.app`, `dist/Magnify.zip`, and `dist/Magnify.dmg`. For 
 - `Cmd+Opt+E`: show or hide the edit pane
 - Drag and resize the pane to choose the region you want to present
 - `Cmd+Opt+M`: toggle presentation mode
+- `Opt+8`: toggle cursor zoom mode
+- `Opt+=`: zoom in the cursor zoom mode
+- `Opt+-`: zoom out the cursor zoom mode
