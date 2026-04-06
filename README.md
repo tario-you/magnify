@@ -4,7 +4,7 @@
   <img src="Resources/AppIcon.png" alt="Magnify app icon" width="128" height="128">
 </p>
 
-Magnify is a lightweight macOS video conferencing tool that turns a draggable screen region into a clean full-screen live zoom view for demos, calls, and screen shares.
+Magnify is a lightweight macOS video conferencing tool that turns a draggable screen region into a clean full-screen live zoom view for demos, calls, and screen shares. The problem is that `Cmd+Opt+8`, `Cmd+Opt+=`, and `Cmd+Opt+-` do not show the same effect in live conferencing, so I built Magnify to make that zoom effect visible to the audience.
 
 ## Screenshots
 
